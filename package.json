@@ -1,0 +1,24 @@
+{
+  "name": "aco-wasm",
+  "version": "0.1.0",
+  "description": "Ant Colony Optimization TSP Visualizer with WebAssembly",
+  "private": true,
+  "scripts": {
+    "build:wasm": "./scripts/build-wasm.sh",
+    "build:front": "./scripts/build-front.sh",
+    "build": "bun run build:wasm && bun run build:front",
+    "dev": "./scripts/dev.sh",
+    "test:wasm": "cd wasm && cargo test",
+    "test:front": "cd front && bun test",
+    "test": "bun run test:wasm && bun run test:front",
+    "lint:front": "cd front && bun run lint",
+    "lint:fix": "cd front && bun run lint:fix",
+    "format": "cd front && bun run format"
+  },
+  "workspaces": [
+    "front"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

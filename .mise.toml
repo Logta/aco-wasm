@@ -5,7 +5,7 @@ bun = "latest"
 
 # Additional tools for development
 "npm:wasm-pack" = "latest"
-"npm:vite" = "^7.0.4"
+"cargo:cargo-watch" = "latest"
 
 [env]
 # Rust WebAssembly target
@@ -16,43 +16,93 @@ CARGO_TARGET_DIR = "target"
 NODE_ENV = "development"
 
 # WebAssembly optimization flags
-RUSTFLAGS = "-C target-feature=+simd128"
+# RUSTFLAGS = "-C target-feature=+simd128"  # Disabled due to compatibility issues
 
 [tasks.setup]
 description = "Setup development environment"
 run = [
     "rustup target add wasm32-unknown-unknown",
-    "npm install -g wasm-pack",
-    "cargo install wasm-pack"
+    "bun install -g wasm-pack",
+    "cargo install wasm-pack cargo-watch",
+    "cd front && bun install"
 ]
 
 [tasks.build-wasm]
 description = "Build WebAssembly module"
-run = "wasm-pack build --target web --out-dir pkg"
+run = "cd wasm && wasm-pack build --target web --out-dir pkg"
+dir = "."
+
+[tasks.build-front] 
+description = "Build React frontend"
+run = "cd front && bun run build"
+dir = "."
 
 [tasks.dev]
-description = "Start development server"
-run = "npm run dev"
+description = "Start development server with hot reload"
+run = "./scripts/dev.sh"
+dir = "."
+
+[tasks.dev-wasm]
+description = "Watch and build WebAssembly module"
+run = "cd wasm && cargo watch -x 'build --lib'"
+dir = "."
+
+[tasks.dev-front]
+description = "Start React development server"
+run = "cd front && bun run dev"
+dir = "."
 
 [tasks.build]
 description = "Build production bundle"
 run = [
-    "wasm-pack build --target web --out-dir pkg --release",
-    "npm run build"
+    "./scripts/build-wasm.sh",
+    "./scripts/build-front.sh"
 ]
+dir = "."
 
 [tasks.test]
-description = "Run tests"
+description = "Run all tests"
 run = [
-    "cargo test",
-    "npm test"
+    "cd wasm && cargo test",
+    "cd front && bun test"
 ]
+dir = "."
+
+[tasks.test-wasm]
+description = "Run WebAssembly tests"
+run = "cd wasm && cargo test"
+dir = "."
+
+[tasks.lint]
+description = "Lint frontend code"
+run = "cd front && bun run lint"
+dir = "."
+
+[tasks.lint-fix]
+description = "Fix linting issues"
+run = "cd front && bun run lint:fix"
+dir = "."
+
+[tasks.format]
+description = "Format code"
+run = "cd front && bun run format"
+dir = "."
 
 [tasks.clean]
 description = "Clean build artifacts"
 run = [
-    "cargo clean",
-    "rm -rf pkg/",
-    "rm -rf dist/",
-    "rm -rf node_modules/"
+    "cd wasm && cargo clean",
+    "rm -rf wasm/pkg/",
+    "rm -rf front/dist/",
+    "rm -rf front/node_modules/",
+    "rm -rf front/src/wasm/"
 ]
+dir = "."
+
+[tasks.reset]
+description = "Reset development environment"
+run = [
+    "mise tasks run clean",
+    "mise tasks run setup"
+]
+dir = "."

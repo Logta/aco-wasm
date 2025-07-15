@@ -1,6 +1,7 @@
 .idea
 .claude
 wasm/target
+target
 
 node_modules
 dist

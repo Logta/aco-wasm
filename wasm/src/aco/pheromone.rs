@@ -1,4 +1,3 @@
-use crate::geometry::city::City;
 
 #[derive(Debug, Clone)]
 pub struct PheromoneMatrix {
