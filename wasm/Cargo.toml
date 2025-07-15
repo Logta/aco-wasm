@@ -1,5 +1,5 @@
 [package]
-name = "aco-wasm"
+name = "aco_wasm"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,6 @@ crate-type = ["cdylib"]
 [dependencies]
 wasm-bindgen = "0.2"
 js-sys = "0.3"
-web-sys = "0.3"
 console_error_panic_hook = "0.1.7"
 wee_alloc = "0.4.5"
 getrandom = { version = "0.2", features = ["js"] }

@@ -1,12 +1,11 @@
-mod aco;
-mod geometry;
-mod rendering;
-mod simulation;
-mod input;
+pub mod aco;
+pub mod geometry;
+pub mod rendering;
+pub mod simulation;
+pub mod input;
 
 use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
@@ -31,3 +30,5 @@ pub fn main() {
 pub fn greet(name: &str) {
     alert(&format!("Hello, {}!", name));
 }
+
+pub use geometry::city::City;
