@@ -1,0 +1,61 @@
+[tools]
+node = "24"
+rust = "latest"
+bun = "latest"
+
+# Rust for WebAssembly implementation
+rust = "1.75"
+
+# Additional tools for development
+"npm:wasm-pack" = "latest"
+"npm:vite" = "^7.0.4"
+
+[env]
+# Rust WebAssembly target
+RUSTUP_TOOLCHAIN = "stable"
+CARGO_TARGET_DIR = "target"
+
+# Node environment
+NODE_ENV = "development"
+
+# WebAssembly optimization flags
+RUSTFLAGS = "-C target-feature=+simd128"
+
+[tasks.setup]
+description = "Setup development environment"
+run = [
+    "rustup target add wasm32-unknown-unknown",
+    "npm install -g wasm-pack",
+    "cargo install wasm-pack"
+]
+
+[tasks.build-wasm]
+description = "Build WebAssembly module"
+run = "wasm-pack build --target web --out-dir pkg"
+
+[tasks.dev]
+description = "Start development server"
+run = "npm run dev"
+
+[tasks.build]
+description = "Build production bundle"
+run = [
+    "wasm-pack build --target web --out-dir pkg --release",
+    "npm run build"
+]
+
+[tasks.test]
+description = "Run tests"
+run = [
+    "cargo test",
+    "npm test"
+]
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = [
+    "cargo clean",
+    "rm -rf pkg/",
+    "rm -rf dist/",
+    "rm -rf node_modules/"
+]
