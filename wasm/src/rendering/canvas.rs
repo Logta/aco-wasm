@@ -4,7 +4,6 @@ use crate::geometry::city::City;
 
 #[wasm_bindgen]
 pub struct CanvasRenderer {
-    canvas: HtmlCanvasElement,
     context: CanvasRenderingContext2d,
     width: u32,
     height: u32,
@@ -23,7 +22,6 @@ impl CanvasRenderer {
         let height = canvas.height();
 
         Ok(CanvasRenderer {
-            canvas,
             context,
             width,
             height,
@@ -34,8 +32,8 @@ impl CanvasRenderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
-        self.canvas.set_width(width);
-        self.canvas.set_height(height);
+        // Note: Canvas resizing should be handled on the JavaScript side
+        // The context will automatically reflect the canvas size changes
     }
 
     #[wasm_bindgen]

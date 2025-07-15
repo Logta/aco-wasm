@@ -36,8 +36,16 @@ export default function ACOVisualizer() {
     try {
       console.log("Initializing WebAssembly engine...");
       
-      // Initialize canvas renderer
-      engine.initialize_canvas(canvasRef.current);
+      const canvas = canvasRef.current;
+      
+      // Set canvas internal size first, before any other operations
+      canvas.width = 800;
+      canvas.height = 600;
+      
+      console.log(`Canvas setup: ${canvas.width}x${canvas.height}`);
+      
+      // Initialize canvas renderer in WASM
+      engine.initialize_canvas(canvas);
       engine.resize_canvas(800, 600);
       
       // Clear any existing state
@@ -118,11 +126,19 @@ export default function ACOVisualizer() {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    
+    // Get click position relative to the display canvas
+    const displayX = event.clientX - rect.left;
+    const displayY = event.clientY - rect.top;
+    
+    // Convert to canvas internal coordinates (800x600 logical coordinates)
+    const logicalX = (displayX / rect.width) * 800;
+    const logicalY = (displayY / rect.height) * 600;
+
+    console.log(`Click: display(${displayX.toFixed(1)}, ${displayY.toFixed(1)}), logical(${logicalX.toFixed(1)}, ${logicalY.toFixed(1)})`);
 
     try {
-      engine.add_city(x, y);
+      engine.add_city(logicalX, logicalY);
       setCityCount(engine.get_city_count());
     } catch (err) {
       console.error("Error adding city:", err);
@@ -204,10 +220,10 @@ export default function ACOVisualizer() {
       // Clear cities
       engine.clear_cities();
       
-      // Add random cities
+      // Add random cities using canvas internal coordinates
       for (let i = 0; i < 10; i++) {
-        const x = Math.random() * 760 + 20; // 20px margin
-        const y = Math.random() * 560 + 20; // 20px margin
+        const x = Math.random() * 760 + 20; // 20px margin from 800px width
+        const y = Math.random() * 560 + 20; // 20px margin from 600px height
         engine.add_city(x, y);
       }
       
