@@ -3,9 +3,6 @@ node = "24"
 rust = "latest"
 bun = "latest"
 
-# Rust for WebAssembly implementation
-rust = "1.75"
-
 # Additional tools for development
 "npm:wasm-pack" = "latest"
 "npm:vite" = "^7.0.4"

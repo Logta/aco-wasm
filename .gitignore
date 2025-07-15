@@ -1,3 +1,7 @@
 .idea
 .claude
 wasm/target
+
+node_modules
+dist
+.vscode
