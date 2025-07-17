@@ -1,22 +1,22 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Slider } from "./ui/slider";
-import { Label } from "./ui/label";
-import { Play, Pause, Square, RotateCcw, Settings } from "lucide-react";
+import { Pause, Play, RotateCcw, Settings, Square } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useACOEngine } from "../hooks/useACOEngine";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Label } from "./ui/label";
+import { Slider } from "./ui/slider";
 
 export default function ACOVisualizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number>(0);
   const { engine, isLoading, error } = useACOEngine();
-  
+
   const [isRunning, setIsRunning] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [bestDistance, setBestDistance] = useState<number | null>(null);
   const [cityCount, setCityCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Parameters
   const [numAnts, setNumAnts] = useState([50]);
   const [maxGenerations, setMaxGenerations] = useState([100]);
@@ -27,68 +27,77 @@ export default function ACOVisualizer() {
 
   // Don't auto-initialize, let user control initialization
 
-  const handleInitialize = () => {
-    if (!engine || !canvasRef.current) {
-      console.error("Engine or canvas not ready for initialization");
+  const handleInitialize = useCallback(() => {
+    if (!engine || !canvasRef.current || isInitialized) {
       return;
     }
 
     try {
       console.log("Initializing WebAssembly engine...");
-      
+
       const canvas = canvasRef.current;
-      
+
       // Set canvas internal size first, before any other operations
       canvas.width = 800;
       canvas.height = 600;
-      
+
       console.log(`Canvas setup: ${canvas.width}x${canvas.height}`);
-      
+
       // Initialize canvas renderer in WASM
       engine.initialize_canvas(canvas);
       engine.resize_canvas(800, 600);
-      
+
       // Clear any existing state
       engine.clear_cities();
-      
+
       // Use safe rendering
       engine.render();
-      
+
       setIsInitialized(true);
       setCityCount(0);
       setGeneration(0);
       setBestDistance(null);
       setIsRunning(false);
-      
+
       console.log("WebAssembly engine initialized successfully");
     } catch (err) {
       console.error("Failed to initialize WebAssembly engine:", err);
       setIsInitialized(false);
     }
-  };
+  }, [engine, isInitialized]);
+
+  // Auto-initialize when engine is ready
+  useEffect(() => {
+    if (engine && canvasRef.current && !isInitialized) {
+      handleInitialize();
+    }
+  }, [engine, handleInitialize, isInitialized]);
 
   // Animation loop
-  const animate = useCallback((timestamp: number) => {
-    if (!engine || !isRunning) return;
+  const animate = useCallback(
+    (timestamp: number) => {
+      if (!engine || !isRunning) return;
 
-    // Update animation
-    engine.update_animation(timestamp);
-    
-    // Run algorithm iteration
-    if (engine.run_iteration()) {
-      setGeneration(engine.get_generation());
-      setBestDistance(engine.get_best_distance());
-    } else {
-      setIsRunning(false);
-    }
-    
-    // Render
-    engine.render();
-    
-    if (isRunning) {
-      animationFrameRef.current = requestAnimationFrame(animate);
-    }
-  }, [engine, isRunning]);
+      // Update animation
+      engine.update_animation(timestamp);
+
+      // Run algorithm iteration
+      if (engine.run_iteration()) {
+        setGeneration(engine.get_generation());
+        setBestDistance(engine.get_best_distance());
+      } else {
+        setIsRunning(false);
+      }
+
+      // Render
+      engine.render();
+
+      if (isRunning) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    },
+    [engine, isRunning]
+  );
 
   // Start/stop animation loop
   useEffect(() => {
@@ -116,7 +125,7 @@ export default function ACOVisualizer() {
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!engine || isRunning) return;
-    
+
     if (!isInitialized) {
       alert("まず初期化ボタンを押してください");
       return;
@@ -126,16 +135,18 @@ export default function ACOVisualizer() {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    
+
     // Get click position relative to the display canvas
     const displayX = event.clientX - rect.left;
     const displayY = event.clientY - rect.top;
-    
+
     // Convert to canvas internal coordinates (800x600 logical coordinates)
     const logicalX = (displayX / rect.width) * 800;
     const logicalY = (displayY / rect.height) * 600;
 
-    console.log(`Click: display(${displayX.toFixed(1)}, ${displayY.toFixed(1)}), logical(${logicalX.toFixed(1)}, ${logicalY.toFixed(1)})`);
+    console.log(
+      `Click: display(${displayX.toFixed(1)}, ${displayY.toFixed(1)}), logical(${logicalX.toFixed(1)}, ${logicalY.toFixed(1)})`
+    );
 
     try {
       engine.add_city(logicalX, logicalY);
@@ -150,20 +161,14 @@ export default function ACOVisualizer() {
       alert("まず初期化ボタンを押してください");
       return;
     }
-    
+
     if (!engine || cityCount < 3) {
       alert("少なくとも3つの都市を追加してください");
       return;
     }
 
-    engine.initialize_colony(
-      numAnts[0],
-      maxGenerations[0],
-      evaporationRate[0],
-      alpha[0],
-      beta[0],
-    );
-    
+    engine.initialize_colony(numAnts[0], maxGenerations[0], evaporationRate[0], alpha[0], beta[0]);
+
     engine.set_animation_speed(animationSpeed[0]);
     engine.start();
     setIsRunning(true);
@@ -173,14 +178,14 @@ export default function ACOVisualizer() {
 
   const handleStop = () => {
     if (!engine) return;
-    
+
     engine.stop();
     setIsRunning(false);
   };
 
   const handleReset = () => {
     if (!engine) return;
-    
+
     try {
       // Don't call stop() if not running
       if (isRunning) {
@@ -207,7 +212,7 @@ export default function ACOVisualizer() {
       alert("まず初期化ボタンを押してください");
       return;
     }
-    
+
     if (!engine || isRunning) return;
 
     try {
@@ -216,17 +221,17 @@ export default function ACOVisualizer() {
         engine.stop();
         setIsRunning(false);
       }
-      
+
       // Clear cities
       engine.clear_cities();
-      
+
       // Add random cities using canvas internal coordinates
       for (let i = 0; i < 10; i++) {
         const x = Math.random() * 760 + 20; // 20px margin from 800px width
         const y = Math.random() * 560 + 20; // 20px margin from 600px height
         engine.add_city(x, y);
       }
-      
+
       // Update state
       setCityCount(engine.get_city_count());
       setGeneration(0);
@@ -280,8 +285,8 @@ export default function ACOVisualizer() {
               style={{ maxWidth: "100%", height: "auto" }}
             />
             <p className="text-sm text-muted-foreground mt-2">
-              {isInitialized 
-                ? "キャンバスをクリックして都市を追加" 
+              {isInitialized
+                ? "キャンバスをクリックして都市を追加"
                 : "まず初期化ボタンを押してください"}
             </p>
           </CardContent>
@@ -310,7 +315,7 @@ export default function ACOVisualizer() {
                 </Button>
               </div>
             )}
-            
+
             <div className="flex gap-2">
               <Button
                 onClick={handleStart}
@@ -320,17 +325,31 @@ export default function ACOVisualizer() {
                 <Play className="w-4 h-4 mr-2" />
                 開始
               </Button>
-              <Button onClick={handleStop} disabled={!isInitialized || !isRunning} className="flex-1">
+              <Button
+                onClick={handleStop}
+                disabled={!isInitialized || !isRunning}
+                className="flex-1"
+              >
                 <Pause className="w-4 h-4 mr-2" />
                 停止
               </Button>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleReset} disabled={!isInitialized || isRunning} variant="outline" className="flex-1">
+              <Button
+                onClick={handleReset}
+                disabled={!isInitialized || isRunning}
+                variant="outline"
+                className="flex-1"
+              >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 リセット
               </Button>
-              <Button onClick={generateRandomCities} disabled={!isInitialized || isRunning} variant="outline" className="flex-1">
+              <Button
+                onClick={generateRandomCities}
+                disabled={!isInitialized || isRunning}
+                variant="outline"
+                className="flex-1"
+              >
                 ランダム
               </Button>
             </div>
@@ -354,7 +373,7 @@ export default function ACOVisualizer() {
                 disabled={isRunning}
               />
             </div>
-            
+
             <div>
               <Label>最大世代数: {maxGenerations[0]}</Label>
               <Slider
@@ -367,7 +386,7 @@ export default function ACOVisualizer() {
                 disabled={isRunning}
               />
             </div>
-            
+
             <div>
               <Label>蒸発率: {evaporationRate[0].toFixed(2)}</Label>
               <Slider
@@ -380,7 +399,7 @@ export default function ACOVisualizer() {
                 disabled={isRunning}
               />
             </div>
-            
+
             <div>
               <Label>アルファ (α): {alpha[0].toFixed(1)}</Label>
               <Slider
@@ -393,7 +412,7 @@ export default function ACOVisualizer() {
                 disabled={isRunning}
               />
             </div>
-            
+
             <div>
               <Label>ベータ (β): {beta[0].toFixed(1)}</Label>
               <Slider
@@ -406,7 +425,7 @@ export default function ACOVisualizer() {
                 disabled={isRunning}
               />
             </div>
-            
+
             <div>
               <Label>アニメーション速度: {animationSpeed[0].toFixed(1)}倍</Label>
               <Slider

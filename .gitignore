@@ -2,6 +2,8 @@
 .claude
 wasm/target
 target
+front/src/wasm
+front/src/education-wasm
 
 node_modules
 dist

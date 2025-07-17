@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import path from 'path'
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -14,15 +14,15 @@ export default defineConfig({
     host: true,
     port: 5173,
     fs: {
-      allow: ['..'],
+      allow: [".."],
     },
   },
   build: {
-    target: 'esnext',
-    outDir: 'dist',
+    target: "esnext",
+    outDir: "dist",
   },
   optimizeDeps: {
-    exclude: ['aco_wasm'],
+    exclude: ["aco_wasm"],
   },
-  assetsInclude: ['**/*.wasm'],
-})
+  assetsInclude: ["**/*.wasm"],
+});

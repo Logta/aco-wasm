@@ -11,7 +11,7 @@ interface ACOEngineInstance {
     max_generations: number,
     evaporation_rate: number,
     alpha: number,
-    beta: number,
+    beta: number
   ) => void;
   start: () => void;
   stop: () => void;
@@ -44,12 +44,12 @@ export function useACOEngine() {
       try {
         // First, try to import the wasm module
         const wasm = await import("../wasm/aco_wasm.js");
-        
+
         // Initialize the wasm module if needed
         if (wasm.default) {
           await wasm.default();
         }
-        
+
         if (isMounted) {
           setWasmModule(wasm as ACOEngineWasm);
           const engineInstance = new wasm.ACOEngine();
