@@ -37,23 +37,27 @@ export default function EducationalACO() {
 
       // Wait a bit for the clear to complete, then add food sources
       setTimeout(() => {
-        // Add preset food sources around the nest (which is at center)
+        // Add random food sources around the canvas
         const nestX = 400;
         const nestY = 300;
+        const minDistanceFromNest = 100; // Minimum distance from nest
+        const margin = 50; // Margin from canvas edges
         
-        // Add food sources at various distances and angles
-        const foodLocations = [
-          { x: nestX + 150, y: nestY - 100 },
-          { x: nestX - 120, y: nestY + 80 },
-          { x: nestX + 200, y: nestY + 150 },
-          { x: nestX - 180, y: nestY - 50 },
-          { x: nestX + 50, y: nestY - 180 },
-          { x: nestX - 80, y: nestY + 170 },
-        ];
+        // Generate 4-8 random food sources
+        const numFoodSources = Math.floor(Math.random() * 5) + 4;
         
-        foodLocations.forEach(location => {
-          addCity(location.x, location.y);
-        });
+        for (let i = 0; i < numFoodSources; i++) {
+          let x, y, distanceFromNest;
+          
+          // Keep generating positions until we find one far enough from the nest
+          do {
+            x = margin + Math.random() * (800 - 2 * margin);
+            y = margin + Math.random() * (600 - 2 * margin);
+            distanceFromNest = Math.sqrt((x - nestX) ** 2 + (y - nestY) ** 2);
+          } while (distanceFromNest < minDistanceFromNest);
+          
+          addCity(x, y);
+        }
       }, 50);
     }
   };
