@@ -90,6 +90,43 @@ impl Renderer {
         }
     }
     
+    pub fn draw_spatial_pheromones(&self, pheromone_grid: &[f64], grid_width: usize, grid_height: usize, cell_size: f64) {
+        // Find max pheromone value for normalization
+        let max_pheromone = pheromone_grid.iter().fold(0.0f64, |a, &b| a.max(b));
+        
+        if max_pheromone <= 0.0 {
+            return;
+        }
+        
+        // Draw each cell in the pheromone grid
+        for y in 0..grid_height {
+            for x in 0..grid_width {
+                let idx = y * grid_width + x;
+                if idx < pheromone_grid.len() {
+                    let pheromone_level = pheromone_grid[idx];
+                    if pheromone_level > 0.01 {
+                        let normalized_level = (pheromone_level / max_pheromone).min(1.0);
+                        
+                        // Draw pheromone as semi-transparent cyan circles
+                        let opacity = normalized_level * 0.6;
+                        let radius = cell_size * 0.5 + normalized_level * cell_size * 0.3;
+                        
+                        self.context.begin_path();
+                        self.context.set_fill_style(&format!("rgba(0, 255, 255, {})", opacity).into());
+                        self.context.arc(
+                            x as f64 * cell_size + cell_size * 0.5,
+                            y as f64 * cell_size + cell_size * 0.5,
+                            radius,
+                            0.0,
+                            2.0 * std::f64::consts::PI
+                        ).unwrap();
+                        self.context.fill();
+                    }
+                }
+            }
+        }
+    }
+    
     pub fn draw_pheromone_trails(&self, pheromones: &[Vec<f64>], nest: &Nest, food_sources: &[FoodSource], show_pheromones: bool) {
         if !show_pheromones || food_sources.is_empty() {
             return;
@@ -105,17 +142,28 @@ impl Renderer {
         
         // Draw pheromone trails from nest to each food source
         for (i, food_source) in food_sources.iter().enumerate() {
-            if i < pheromones.len() && pheromones.len() > 0 {
-                let pheromone_level = pheromones[0][i]; // From nest (index 0) to food source i
-                let intensity = (pheromone_level / max_pheromone * 255.0).min(255.0) as u8;
+            let food_idx = i + 1; // Food sources start at index 1 in pheromone matrix
+            if food_idx < pheromones.len() && pheromones.len() > 0 {
+                let pheromone_level = pheromones[0][food_idx]; // From nest (index 0) to food source
+                let normalized_level = (pheromone_level / max_pheromone).min(1.0);
                 
-                if intensity > 20 { // Only draw visible pheromone trails
-                    self.context.begin_path();
-                    self.context.set_stroke_style(&format!("rgba(0, 255, 255, {})", intensity as f64 / 255.0 * 0.6).into());
-                    self.context.set_line_width(intensity as f64 / 255.0 * 3.0 + 1.0);
-                    self.context.move_to(nest.location.x, nest.location.y);
-                    self.context.line_to(food_source.location.x, food_source.location.y);
-                    self.context.stroke();
+                if normalized_level > 0.05 { // Only draw visible pheromone trails
+                    // Draw multiple circles along the path to create a dotted trail effect
+                    let steps = 20;
+                    for step in 0..=steps {
+                        let t = step as f64 / steps as f64;
+                        let x = nest.location.x + t * (food_source.location.x - nest.location.x);
+                        let y = nest.location.y + t * (food_source.location.y - nest.location.y);
+                        
+                        // Size and opacity based on pheromone strength
+                        let radius = 3.0 + normalized_level * 7.0;
+                        let opacity = normalized_level * 0.4;
+                        
+                        self.context.begin_path();
+                        self.context.set_fill_style(&format!("rgba(0, 255, 255, {})", opacity).into());
+                        self.context.arc(x, y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
+                        self.context.fill();
+                    }
                 }
             }
         }

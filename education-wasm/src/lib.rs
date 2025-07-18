@@ -25,9 +25,15 @@ pub struct SimulationState {
     nest_x: f64,
     nest_y: f64,
     food_sources: Vec<(f64, f64, f64, f64)>, // (x, y, food_amount, max_food)
-    ants: Vec<(usize, f64, f64, f64, f64, bool, f64, u8, f64, f64, usize)>, // (id, x, y, target_x, target_y, is_moving, move_progress, state, carrying_food, total_food, current_target_food)
+    ants: Vec<(usize, f64, f64, f64, f64, bool, f64, u8, f64, f64, usize, f64, f64, u32)>, // (id, x, y, target_x, target_y, is_moving, move_progress, state, carrying_food, total_food, current_target_food, direction_angle, move_speed, exploration_timer)
     pheromone_data: Vec<f64>, // Flattened matrix
     pheromone_size: usize,
+    
+    // 2D pheromone grid for spatial pheromones
+    pheromone_grid: Vec<f64>, // Flattened 2D grid
+    grid_width: usize,
+    grid_height: usize,
+    grid_cell_size: f64,
     
     // Parameters
     num_ants: usize,
@@ -47,6 +53,10 @@ pub struct SimulationState {
 
 impl SimulationState {
     fn new(canvas_id: &str) -> Self {
+        let grid_cell_size = 10.0; // 10x10 pixel cells
+        let grid_width = (800.0 / grid_cell_size) as usize;
+        let grid_height = (600.0 / grid_cell_size) as usize;
+        
         SimulationState {
             nest_x: 400.0,
             nest_y: 300.0,
@@ -54,6 +64,12 @@ impl SimulationState {
             ants: Vec::new(),
             pheromone_data: vec![1.0], // Start with single element for nest
             pheromone_size: 1,
+            
+            // Initialize pheromone grid
+            pheromone_grid: vec![0.0; grid_width * grid_height],
+            grid_width,
+            grid_height,
+            grid_cell_size,
             
             num_ants: 15,
             alpha: 1.0,
@@ -178,65 +194,58 @@ pub fn step_simulation() {
         // First pass: determine updates needed
         for i in 0..state.ants.len() {
             let ant = &state.ants[i];
-            let (_id, x, y, target_x, target_y, is_moving, move_progress, ant_state, carrying_food, _total_food, _current_target_food) = *ant;
+            let (_id, x, y, _target_x, _target_y, _is_moving, _move_progress, ant_state, carrying_food, _total_food, _current_target_food, direction_angle, move_speed, exploration_timer) = *ant;
             
-            if is_moving {
-                // Continue moving towards target
-                let new_progress = move_progress + state.animation_speed * 0.02;
-                if new_progress >= 1.0 {
-                    // Reached target
-                    ant_updates.push((i, "move_complete", target_x, target_y, 0.0, 0.0, 0));
-                } else {
-                    // Interpolate position
-                    let new_x = x + (target_x - x) * new_progress;
-                    let new_y = y + (target_y - y) * new_progress;
-                    ant_updates.push((i, "move_update", new_x, new_y, new_progress, 0.0, 0));
-                }
-            } else {
-                // Ant has reached its destination
-                match ant_state {
-                    0 => { // SearchingForFood
-                        if let Some(food_idx) = ant_is_at_food_source_internal(state, i) {
-                            // Try to collect food
-                            if state.food_sources[food_idx].2 > 0.0 {
-                                let food_taken = 1.0_f64.min(state.food_sources[food_idx].2);
-                                ant_updates.push((i, "collect_food", food_taken, 0.0, 0.0, food_idx as f64, 1));
-                            }
-                        } else {
-                            // Look for a food source to visit
-                            if let Some(food_idx) = select_food_source_for_ant_internal(state, i) {
-                                let target_x = state.food_sources[food_idx].0;
-                                let target_y = state.food_sources[food_idx].1;
-                                ant_updates.push((i, "move_to_food", target_x, target_y, 0.0, food_idx as f64, 0));
-                            }
+            match ant_state {
+                0 => { // SearchingForFood - Random walk exploration
+                    // Check if ant found food at current position
+                    if let Some(food_idx) = ant_is_at_food_source_internal(state, i) {
+                        // Try to collect food
+                        if state.food_sources[food_idx].2 > 0.0 {
+                            let food_taken = 1.0_f64.min(state.food_sources[food_idx].2);
+                            ant_updates.push((i, "collect_food", food_taken, 0.0, 0.0, food_idx as f64, 1));
                         }
+                    } else {
+                        // Random walk exploration
+                        let (new_x, new_y, new_angle, new_timer) = calculate_random_walk_step(state, i, x, y, direction_angle, move_speed, exploration_timer);
+                        ant_updates.push((i, "random_walk", new_x, new_y, new_angle, 0.0, new_timer as i32));
                     }
-                    1 => { // CarryingFood
-                        if ant_is_at_nest_internal(state, i) {
-                            // Deliver food
-                            ant_updates.push((i, "deliver_food", carrying_food, 0.0, 0.0, 0.0, 0));
-                        }
-                    }
-                    _ => {}
                 }
+                1 => { // CarryingFood - Move towards nest with pheromone trail
+                    if ant_is_at_nest_internal(state, i) {
+                        // Deliver food
+                        ant_updates.push((i, "deliver_food", carrying_food, 0.0, 0.0, 0.0, 0));
+                    } else {
+                        // Move towards nest
+                        let (new_x, new_y, new_angle) = calculate_return_to_nest_step(state, i, x, y, move_speed);
+                        ant_updates.push((i, "return_to_nest", new_x, new_y, new_angle, 0.0, 0));
+                    }
+                }
+                _ => {}
             }
         }
         
         // Second pass: apply updates
-        for (ant_idx, update_type, val1, val2, val3, val4, _val5) in ant_updates {
+        for (ant_idx, update_type, val1, val2, val3, val4, val5) in ant_updates {
             if ant_idx < state.ants.len() {
                 let ant = &mut state.ants[ant_idx];
                 match update_type {
-                    "move_complete" => {
+                    "random_walk" => {
                         ant.1 = val1; // x
                         ant.2 = val2; // y
-                        ant.5 = false; // is_moving
-                        ant.6 = 1.0; // move_progress
+                        ant.11 = val3; // direction_angle
+                        ant.13 = val5 as u32; // exploration_timer
+                        
+                        // Deposit small amount of pheromone while exploring
+                        deposit_pheromone_at_position(state, val1, val2, 0.5);
                     }
-                    "move_update" => {
+                    "return_to_nest" => {
                         ant.1 = val1; // x
                         ant.2 = val2; // y
-                        ant.6 = val3; // move_progress
+                        ant.11 = val3; // direction_angle
+                        
+                        // Deposit stronger pheromone when carrying food
+                        deposit_pheromone_at_position(state, val1, val2, 2.0);
                     }
                     "collect_food" => {
                         let food_idx = val4 as usize;
@@ -244,26 +253,20 @@ pub fn step_simulation() {
                             state.food_sources[food_idx].2 -= val1;
                             ant.8 = val1; // carrying_food
                             ant.9 += val1; // total_food
-                            ant.3 = state.nest_x; // target_x
-                            ant.4 = state.nest_y; // target_y
-                            ant.5 = true; // is_moving
-                            ant.6 = 0.0; // move_progress
                             ant.7 = 1; // state = CarryingFood
                             ant.10 = food_idx; // current_target_food
                             console::log_1(&format!("Ant {} collected food", ant.0).into());
                         }
                     }
-                    "move_to_food" => {
-                        ant.3 = val1; // target_x
-                        ant.4 = val2; // target_y
-                        ant.5 = true; // is_moving
-                        ant.6 = 0.0; // move_progress
-                        ant.10 = val4 as usize; // current_target_food
-                    }
                     "deliver_food" => {
                         state.total_food_collected += val1;
                         ant.8 = 0.0; // carrying_food
                         ant.7 = 0; // state = SearchingForFood
+                        ant.10 = usize::MAX; // clear current_target_food
+                        // Reset exploration with random angle
+                        let mut rng = thread_rng();
+                        ant.11 = rng.gen::<f64>() * 2.0 * std::f64::consts::PI; // new random direction
+                        ant.13 = 0; // reset exploration timer
                         console::log_1(&format!("Ant {} delivered {:.1} food. Total: {:.1}", ant.0, val1, state.total_food_collected).into());
                     }
                     _ => {}
@@ -275,6 +278,7 @@ pub fn step_simulation() {
         let mut rng = thread_rng();
         if rng.gen::<f64>() < 0.1 {
             update_pheromones_internal(state);
+            evaporate_spatial_pheromones(state);
         }
     }
 }
@@ -300,8 +304,13 @@ pub fn render_simulation() {
             }).collect();
             renderer.draw_food_sources(&food_sources);
             
+            // Draw spatial pheromone grid if enabled
+            if state.show_pheromones {
+                renderer.draw_spatial_pheromones(&state.pheromone_grid, state.grid_width, state.grid_height, state.grid_cell_size);
+            }
+            
             // Draw ants
-            let ants: Vec<Ant> = state.ants.iter().map(|(id, x, y, target_x, target_y, is_moving, move_progress, ant_state, carrying_food, total_food, current_target_food)| {
+            let ants: Vec<Ant> = state.ants.iter().map(|(id, x, y, target_x, target_y, is_moving, move_progress, ant_state, carrying_food, total_food, current_target_food, _direction_angle, _move_speed, _exploration_timer)| {
                 Ant {
                     id: *id,
                     x: *x,
@@ -387,6 +396,50 @@ pub fn set_aco_param(param: &str, value: f64) {
     }
 }
 
+// Helper function to deposit pheromone at a position
+fn deposit_pheromone_at_position(state: &mut SimulationState, x: f64, y: f64, amount: f64) {
+    let grid_x = (x / state.grid_cell_size) as usize;
+    let grid_y = (y / state.grid_cell_size) as usize;
+    
+    if grid_x < state.grid_width && grid_y < state.grid_height {
+        let idx = grid_y * state.grid_width + grid_x;
+        if idx < state.pheromone_grid.len() {
+            state.pheromone_grid[idx] = (state.pheromone_grid[idx] + amount).min(1000.0);
+            
+            // Also deposit in neighboring cells for smoother trails
+            let neighbors = [
+                (grid_x.wrapping_sub(1), grid_y),
+                (grid_x + 1, grid_y),
+                (grid_x, grid_y.wrapping_sub(1)),
+                (grid_x, grid_y + 1),
+            ];
+            
+            for (nx, ny) in neighbors {
+                if nx < state.grid_width && ny < state.grid_height {
+                    let nidx = ny * state.grid_width + nx;
+                    if nidx < state.pheromone_grid.len() {
+                        state.pheromone_grid[nidx] = (state.pheromone_grid[nidx] + amount * 0.5).min(1000.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper function to get pheromone level at a position
+fn get_pheromone_at_position(state: &SimulationState, x: f64, y: f64) -> f64 {
+    let grid_x = (x / state.grid_cell_size) as usize;
+    let grid_y = (y / state.grid_cell_size) as usize;
+    
+    if grid_x < state.grid_width && grid_y < state.grid_height {
+        let idx = grid_y * state.grid_width + grid_x;
+        if idx < state.pheromone_grid.len() {
+            return state.pheromone_grid[idx];
+        }
+    }
+    0.0
+}
+
 // Internal helper functions
 fn initialize_simulation_internal(state: &mut SimulationState) {
     // Limit food sources 
@@ -402,9 +455,12 @@ fn initialize_simulation_internal(state: &mut SimulationState) {
     
     // Create ants at nest
     state.ants.clear();
+    let mut rng = thread_rng();
     for i in 0..state.num_ants {
-        // (id, x, y, target_x, target_y, is_moving, move_progress, state, carrying_food, total_food, current_target_food)
-        state.ants.push((i, state.nest_x, state.nest_y, state.nest_x, state.nest_y, false, 0.0, 0, 0.0, 0.0, usize::MAX));
+        let initial_angle = rng.gen::<f64>() * 2.0 * std::f64::consts::PI;
+        let initial_speed = 1.0 + rng.gen::<f64>() * 0.5; // Speed variation 1.0-1.5
+        // (id, x, y, target_x, target_y, is_moving, move_progress, state, carrying_food, total_food, current_target_food, direction_angle, move_speed, exploration_timer)
+        state.ants.push((i, state.nest_x, state.nest_y, state.nest_x, state.nest_y, false, 0.0, 0, 0.0, 0.0, usize::MAX, initial_angle, initial_speed, 0));
     }
 }
 
@@ -414,6 +470,9 @@ fn clear_simulation_internal(state: &mut SimulationState) {
     state.pheromone_data = vec![1.0];
     state.is_running = false;
     state.total_food_collected = 0.0;
+    
+    // Clear spatial pheromone grid
+    state.pheromone_grid.fill(0.0);
 }
 
 fn ant_is_at_food_source_internal(state: &SimulationState, ant_idx: usize) -> Option<usize> {
@@ -443,51 +502,7 @@ fn ant_is_at_nest_internal(state: &SimulationState, ant_idx: usize) -> bool {
     distance < 10.0
 }
 
-fn select_food_source_for_ant_internal(state: &SimulationState, ant_idx: usize) -> Option<usize> {
-    if ant_idx >= state.ants.len() || state.ants[ant_idx].7 != 0 {
-        return None;
-    }
-    
-    let ant = &state.ants[ant_idx];
-    let mut rng = thread_rng();
-    let mut probabilities = Vec::new();
-    let mut total_prob = 0.0;
-    
-    for (i, (fx, fy, amount, max_amount)) in state.food_sources.iter().enumerate() {
-        if *amount > 0.0 {
-            let distance = ((ant.1 - fx).powi(2) + (ant.2 - fy).powi(2)).sqrt();
-            let food_ratio = if *max_amount > 0.0 { amount / max_amount } else { 0.0 };
-            
-            // Get pheromone level
-            let pheromone = get_pheromone_internal(state, 0, i + 1);
-            
-            let distance_attractiveness = if distance > 0.0 { 1.0 / distance } else { 1.0 };
-            let prob = pheromone.powf(state.alpha) * distance_attractiveness.powf(state.beta) * (1.0 + food_ratio * 2.0);
-            
-            if prob.is_finite() && prob > 0.0 {
-                probabilities.push((i, prob));
-                total_prob += prob;
-            }
-        }
-    }
-    
-    if total_prob == 0.0 || probabilities.is_empty() {
-        return None;
-    }
-    
-    // Roulette wheel selection
-    let random_val = rng.gen::<f64>() * total_prob;
-    let mut cumulative = 0.0;
-    
-    for (food_idx, prob) in &probabilities {
-        cumulative += prob;
-        if cumulative >= random_val {
-            return Some(*food_idx);
-        }
-    }
-    
-    probabilities.first().map(|(idx, _)| *idx)
-}
+// This function is no longer used since we switched to random walk exploration
 
 fn get_pheromone_internal(state: &SimulationState, i: usize, j: usize) -> f64 {
     if i < state.pheromone_size && j < state.pheromone_size {
@@ -504,6 +519,128 @@ fn set_pheromone_internal(state: &mut SimulationState, i: usize, j: usize, value
         let idx = i * state.pheromone_size + j;
         if idx < state.pheromone_data.len() {
             state.pheromone_data[idx] = value;
+        }
+    }
+}
+
+// Calculate random walk step for exploring ants
+fn calculate_random_walk_step(state: &SimulationState, ant_idx: usize, x: f64, y: f64, current_angle: f64, move_speed: f64, exploration_timer: u32) -> (f64, f64, f64, u32) {
+    let mut rng = thread_rng();
+    
+    // Random direction change every 20-60 steps
+    let direction_change_interval = 20 + (exploration_timer % 40);
+    let mut new_angle = current_angle;
+    let mut new_timer = exploration_timer + 1;
+    
+    if exploration_timer >= direction_change_interval {
+        // Sample pheromone levels in different directions
+        let num_samples = 8;
+        let mut best_angle = current_angle;
+        let mut best_pheromone = 0.0;
+        
+        for i in 0..num_samples {
+            let sample_angle = (i as f64 / num_samples as f64) * 2.0 * std::f64::consts::PI;
+            let sample_distance = 20.0;
+            let sample_x = x + sample_angle.cos() * sample_distance;
+            let sample_y = y + sample_angle.sin() * sample_distance;
+            
+            let pheromone_level = get_pheromone_at_position(state, sample_x, sample_y);
+            
+            if pheromone_level > best_pheromone {
+                best_pheromone = pheromone_level;
+                best_angle = sample_angle;
+            }
+        }
+        
+        // Also check for nearby food sources
+        let mut best_food_angle = None;
+        let mut best_food_distance = f64::MAX;
+        
+        for (fx, fy, amount, _) in &state.food_sources {
+            if *amount > 0.0 {
+                let distance = ((x - fx).powi(2) + (y - fy).powi(2)).sqrt();
+                if distance < 100.0 && distance < best_food_distance { // Within sensing range
+                    best_food_distance = distance;
+                    best_food_angle = Some((fy - y).atan2(fx - x));
+                }
+            }
+        }
+        
+        // Decide direction based on pheromone and food sources
+        if let Some(food_angle) = best_food_angle {
+            // Strong bias towards visible food
+            new_angle = food_angle + (rng.gen::<f64>() - 0.5) * 0.5;
+        } else if best_pheromone > 0.1 {
+            // Follow pheromone trail with some randomness
+            let angle_diff = best_angle - current_angle;
+            let normalized_diff = ((angle_diff + std::f64::consts::PI) % (2.0 * std::f64::consts::PI)) - std::f64::consts::PI;
+            new_angle = current_angle + normalized_diff * 0.5 + (rng.gen::<f64>() - 0.5) * std::f64::consts::PI * 0.3;
+        } else {
+            // Random exploration
+            new_angle = current_angle + (rng.gen::<f64>() - 0.5) * std::f64::consts::PI;
+        }
+        
+        new_timer = 0;
+    }
+    
+    // Small random deviation each step
+    let angle_noise = (rng.gen::<f64>() - 0.5) * 0.2;
+    new_angle += angle_noise;
+    
+    // Calculate movement
+    let step_size = move_speed * 2.0;
+    let mut new_x = x + new_angle.cos() * step_size;
+    let mut new_y = y + new_angle.sin() * step_size;
+    
+    // Boundary checking and bouncing
+    const CANVAS_WIDTH: f64 = 800.0;
+    const CANVAS_HEIGHT: f64 = 600.0;
+    const MARGIN: f64 = 20.0;
+    
+    if new_x < MARGIN {
+        new_x = MARGIN;
+        new_angle = std::f64::consts::PI - new_angle;
+    } else if new_x > CANVAS_WIDTH - MARGIN {
+        new_x = CANVAS_WIDTH - MARGIN;
+        new_angle = std::f64::consts::PI - new_angle;
+    }
+    
+    if new_y < MARGIN {
+        new_y = MARGIN;
+        new_angle = -new_angle;
+    } else if new_y > CANVAS_HEIGHT - MARGIN {
+        new_y = CANVAS_HEIGHT - MARGIN;
+        new_angle = -new_angle;
+    }
+    
+    (new_x, new_y, new_angle, new_timer)
+}
+
+// Calculate return to nest step for ants carrying food
+fn calculate_return_to_nest_step(state: &SimulationState, _ant_idx: usize, x: f64, y: f64, move_speed: f64) -> (f64, f64, f64) {
+    let mut rng = thread_rng();
+    
+    // Direction towards nest
+    let nest_angle = (state.nest_y - y).atan2(state.nest_x - x);
+    
+    // Add small random deviation to make path more natural
+    let angle_noise = (rng.gen::<f64>() - 0.5) * 0.3;
+    let actual_angle = nest_angle + angle_noise;
+    
+    // Move towards nest
+    let step_size = move_speed * 1.5; // Slightly faster when returning
+    let new_x = x + actual_angle.cos() * step_size;
+    let new_y = y + actual_angle.sin() * step_size;
+    
+    (new_x, new_y, actual_angle)
+}
+
+// Evaporate spatial pheromones
+fn evaporate_spatial_pheromones(state: &mut SimulationState) {
+    for i in 0..state.pheromone_grid.len() {
+        state.pheromone_grid[i] *= 1.0 - state.evaporation_rate * 0.5; // Slower evaporation for spatial pheromones
+        if state.pheromone_grid[i] < 0.01 {
+            state.pheromone_grid[i] = 0.0;
         }
     }
 }
