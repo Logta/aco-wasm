@@ -93,10 +93,12 @@ export default function EducationalACO() {
       canvas.height = 600;
       setCanvasReady(true);
 
-      // Initialize WASM after canvas is ready
-      if (initializeWasm) {
-        initializeWasm();
-      }
+      // Wait a bit to ensure the canvas is fully ready before initializing WASM
+      setTimeout(() => {
+        if (initializeWasm) {
+          initializeWasm();
+        }
+      }, 100);
     }
   }, [canvasReady, initializeWasm]);
 
