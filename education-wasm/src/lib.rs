@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::console;
 use rand::{thread_rng, Rng};
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 mod city;
 mod ant;
@@ -19,6 +20,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 // Global state that completely avoids wasm-bindgen Rc management
 static GLOBAL_STATE: Mutex<Option<SimulationState>> = Mutex::new(None);
+static INITIALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub struct SimulationState {
     // Core state as simple values (no Rc)
@@ -92,6 +94,12 @@ impl SimulationState {
 // Global functions that work with the global state
 #[wasm_bindgen]
 pub fn initialize_simulation(canvas_id: &str) -> Result<(), JsValue> {
+    // Check if already initialized
+    if INITIALIZED.swap(true, Ordering::SeqCst) {
+        console::log_1(&"Simulation already initialized, skipping...".into());
+        return Ok(());
+    }
+    
     console_error_panic_hook::set_once();
     console::log_1(&"Initializing Global Educational Ant Foraging Simulation".into());
     
@@ -184,7 +192,13 @@ pub fn reset_simulation() {
 
 #[wasm_bindgen]
 pub fn step_simulation() {
-    let mut state_guard = GLOBAL_STATE.lock().unwrap();
+    let mut state_guard = match GLOBAL_STATE.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            console::log_1(&"Failed to acquire lock for step_simulation".into());
+            return;
+        }
+    };
     if let Some(state) = state_guard.as_mut() {
         if !state.is_running || state.food_sources.is_empty() {
             return;
@@ -287,9 +301,17 @@ pub fn step_simulation() {
 
 #[wasm_bindgen]
 pub fn render_simulation() {
-    let state_guard = GLOBAL_STATE.lock().unwrap();
+    let state_guard = match GLOBAL_STATE.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            console::log_1(&"Failed to acquire lock for render_simulation".into());
+            return;
+        }
+    };
+    
     if let Some(state) = state_guard.as_ref() {
-        if let Ok(renderer) = Renderer::new(&state.canvas_id) {
+        match Renderer::new(&state.canvas_id) {
+            Ok(renderer) => {
             renderer.clear();
             
             // Draw spatial pheromone grid first (as background) if enabled
@@ -330,6 +352,10 @@ pub fn render_simulation() {
                 }
             }).collect();
             renderer.draw_ants_with_torus(&ants, state.show_trails, state.torus_mode);
+            },
+            Err(e) => {
+                console::log_1(&format!("Failed to create renderer: {:?}", e).into());
+            }
         }
     }
 }

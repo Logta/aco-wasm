@@ -14,6 +14,7 @@ export function useEducationalACOGlobal() {
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const animationFrameRef = useRef<number>();
+  const initializingRef = useRef(false);
 
   const updateStats = useCallback(async () => {
     try {
@@ -27,6 +28,13 @@ export function useEducationalACOGlobal() {
   }, []);
 
   const initializeWasm = useCallback(async () => {
+    // Prevent multiple initializations
+    if (initializingRef.current || isInitialized) {
+      return;
+    }
+    
+    initializingRef.current = true;
+    
     try {
       // Import the education wasm module
       const wasmModule = await import("../education-wasm/education_wasm.js");
@@ -40,8 +48,10 @@ export function useEducationalACOGlobal() {
     } catch (err) {
       console.error("Failed to initialize Educational WASM:", err);
       setError(`Failed to initialize: ${err}`);
+    } finally {
+      initializingRef.current = false;
     }
-  }, [updateStats]);
+  }, [updateStats, isInitialized]);
 
   useEffect(() => {
     return () => {

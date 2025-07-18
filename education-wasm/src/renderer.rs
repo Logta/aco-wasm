@@ -15,7 +15,7 @@ impl Renderer {
         let document = window.document().unwrap();
         let canvas = document
             .get_element_by_id(canvas_id)
-            .unwrap()
+            .ok_or_else(|| JsValue::from_str(&format!("Canvas with id '{}' not found", canvas_id)))?
             .dyn_into::<HtmlCanvasElement>()?;
         
         let context = canvas
