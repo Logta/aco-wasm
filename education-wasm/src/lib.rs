@@ -49,6 +49,7 @@ pub struct SimulationState {
     is_running: bool,
     total_food_collected: f64,
     canvas_id: String,
+    torus_mode: bool,
 }
 
 impl SimulationState {
@@ -83,6 +84,7 @@ impl SimulationState {
             is_running: false,
             total_food_collected: 0.0,
             canvas_id: canvas_id.to_string(),
+            torus_mode: false,
         }
     }
 }
@@ -327,7 +329,7 @@ pub fn render_simulation() {
                     current_target_food: if *current_target_food == usize::MAX { None } else { Some(*current_target_food) },
                 }
             }).collect();
-            renderer.draw_ants(&ants, state.show_trails);
+            renderer.draw_ants_with_torus(&ants, state.show_trails, state.torus_mode);
         }
     }
 }
@@ -396,6 +398,84 @@ pub fn set_aco_param(param: &str, value: f64) {
     }
 }
 
+#[wasm_bindgen]
+pub fn set_torus_mode(enabled: bool) {
+    let mut state_guard = GLOBAL_STATE.lock().unwrap();
+    if let Some(state) = state_guard.as_mut() {
+        state.torus_mode = enabled;
+    }
+}
+
+// Helper function to normalize coordinates for torus mode
+fn normalize_torus_coordinates(x: f64, y: f64, canvas_width: f64, canvas_height: f64) -> (f64, f64) {
+    let normalized_x = if x < 0.0 {
+        x + canvas_width
+    } else if x >= canvas_width {
+        x - canvas_width
+    } else {
+        x
+    };
+    
+    let normalized_y = if y < 0.0 {
+        y + canvas_height
+    } else if y >= canvas_height {
+        y - canvas_height
+    } else {
+        y
+    };
+    
+    (normalized_x, normalized_y)
+}
+
+// Helper function to calculate distance considering torus mode
+fn calculate_distance(state: &SimulationState, x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+    if state.torus_mode {
+        const CANVAS_WIDTH: f64 = 800.0;
+        const CANVAS_HEIGHT: f64 = 600.0;
+        
+        // Calculate both direct and wrapped distances
+        let dx = (x2 - x1).abs();
+        let dy = (y2 - y1).abs();
+        
+        // For torus, use the shorter distance (direct or wrapped)
+        let dx_wrapped = CANVAS_WIDTH - dx;
+        let dy_wrapped = CANVAS_HEIGHT - dy;
+        
+        let min_dx = dx.min(dx_wrapped);
+        let min_dy = dy.min(dy_wrapped);
+        
+        (min_dx * min_dx + min_dy * min_dy).sqrt()
+    } else {
+        // Regular Euclidean distance
+        ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt()
+    }
+}
+
+// Helper function to calculate angle considering torus wrapping
+fn calculate_torus_angle(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+    const CANVAS_WIDTH: f64 = 800.0;
+    const CANVAS_HEIGHT: f64 = 600.0;
+    
+    // Calculate both direct and wrapped deltas
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    
+    // Find the shortest path considering wrapping
+    let shortest_dx = if dx.abs() > CANVAS_WIDTH / 2.0 {
+        if dx > 0.0 { dx - CANVAS_WIDTH } else { dx + CANVAS_WIDTH }
+    } else {
+        dx
+    };
+    
+    let shortest_dy = if dy.abs() > CANVAS_HEIGHT / 2.0 {
+        if dy > 0.0 { dy - CANVAS_HEIGHT } else { dy + CANVAS_HEIGHT }
+    } else {
+        dy
+    };
+    
+    shortest_dy.atan2(shortest_dx)
+}
+
 // Helper function to deposit pheromone at a position
 fn deposit_pheromone_at_position(state: &mut SimulationState, x: f64, y: f64, amount: f64) {
     if state.pheromone_grid.is_empty() || state.grid_cell_size <= 0.0 {
@@ -411,18 +491,38 @@ fn deposit_pheromone_at_position(state: &mut SimulationState, x: f64, y: f64, am
             state.pheromone_grid[idx] = (state.pheromone_grid[idx] + amount).min(1000.0);
             
             // Also deposit in neighboring cells for smoother trails
-            let neighbors = [
-                (grid_x.wrapping_sub(1), grid_y),
-                (grid_x + 1, grid_y),
-                (grid_x, grid_y.wrapping_sub(1)),
-                (grid_x, grid_y + 1),
-            ];
+            let neighbors = if state.torus_mode {
+                // Torus mode: wrap around edges
+                [
+                    (if grid_x == 0 { state.grid_width - 1 } else { grid_x - 1 }, grid_y),
+                    (if grid_x == state.grid_width - 1 { 0 } else { grid_x + 1 }, grid_y),
+                    (grid_x, if grid_y == 0 { state.grid_height - 1 } else { grid_y - 1 }),
+                    (grid_x, if grid_y == state.grid_height - 1 { 0 } else { grid_y + 1 }),
+                ]
+            } else {
+                // Regular mode: check bounds
+                [
+                    (grid_x.wrapping_sub(1), grid_y),
+                    (grid_x + 1, grid_y),
+                    (grid_x, grid_y.wrapping_sub(1)),
+                    (grid_x, grid_y + 1),
+                ]
+            };
             
             for (nx, ny) in neighbors {
-                if nx < state.grid_width && ny < state.grid_height {
+                if state.torus_mode {
+                    // In torus mode, all neighbors are valid (wrapped)
                     let nidx = ny * state.grid_width + nx;
                     if nidx < state.pheromone_grid.len() {
                         state.pheromone_grid[nidx] = (state.pheromone_grid[nidx] + amount * 0.5).min(1000.0);
+                    }
+                } else {
+                    // In regular mode, check bounds
+                    if nx < state.grid_width && ny < state.grid_height {
+                        let nidx = ny * state.grid_width + nx;
+                        if nidx < state.pheromone_grid.len() {
+                            state.pheromone_grid[nidx] = (state.pheromone_grid[nidx] + amount * 0.5).min(1000.0);
+                        }
                     }
                 }
             }
@@ -493,7 +593,7 @@ fn ant_is_at_food_source_internal(state: &SimulationState, ant_idx: usize) -> Op
     let ant = &state.ants[ant_idx];
     for (i, (fx, fy, amount, _)) in state.food_sources.iter().enumerate() {
         if *amount > 0.0 {
-            let distance = ((ant.1 - fx).powi(2) + (ant.2 - fy).powi(2)).sqrt();
+            let distance = calculate_distance(state, ant.1, ant.2, *fx, *fy);
             if distance < 10.0 {
                 return Some(i);
             }
@@ -508,7 +608,7 @@ fn ant_is_at_nest_internal(state: &SimulationState, ant_idx: usize) -> bool {
     }
     
     let ant = &state.ants[ant_idx];
-    let distance = ((ant.1 - state.nest_x).powi(2) + (ant.2 - state.nest_y).powi(2)).sqrt();
+    let distance = calculate_distance(state, ant.1, ant.2, state.nest_x, state.nest_y);
     distance < 10.0
 }
 
@@ -568,10 +668,16 @@ fn calculate_random_walk_step(state: &SimulationState, ant_idx: usize, x: f64, y
         
         for (fx, fy, amount, _) in &state.food_sources {
             if *amount > 0.0 {
-                let distance = ((x - fx).powi(2) + (y - fy).powi(2)).sqrt();
+                let distance = calculate_distance(state, x, y, *fx, *fy);
                 if distance < 100.0 && distance < best_food_distance { // Within sensing range
                     best_food_distance = distance;
-                    best_food_angle = Some((fy - y).atan2(fx - x));
+                    // Calculate angle considering torus wrapping
+                    let angle = if state.torus_mode {
+                        calculate_torus_angle(x, y, *fx, *fy)
+                    } else {
+                        (fy - y).atan2(fx - x)
+                    };
+                    best_food_angle = Some(angle);
                 }
             }
         }
@@ -602,25 +708,33 @@ fn calculate_random_walk_step(state: &SimulationState, ant_idx: usize, x: f64, y
     let mut new_x = x + new_angle.cos() * step_size;
     let mut new_y = y + new_angle.sin() * step_size;
     
-    // Boundary checking and bouncing
+    // Boundary checking - torus mode or bounce mode
     const CANVAS_WIDTH: f64 = 800.0;
     const CANVAS_HEIGHT: f64 = 600.0;
     const MARGIN: f64 = 20.0;
     
-    if new_x < MARGIN {
-        new_x = MARGIN;
-        new_angle = std::f64::consts::PI - new_angle;
-    } else if new_x > CANVAS_WIDTH - MARGIN {
-        new_x = CANVAS_WIDTH - MARGIN;
-        new_angle = std::f64::consts::PI - new_angle;
-    }
-    
-    if new_y < MARGIN {
-        new_y = MARGIN;
-        new_angle = -new_angle;
-    } else if new_y > CANVAS_HEIGHT - MARGIN {
-        new_y = CANVAS_HEIGHT - MARGIN;
-        new_angle = -new_angle;
+    if state.torus_mode {
+        // Torus mode: wrap around edges
+        let (wrapped_x, wrapped_y) = normalize_torus_coordinates(new_x, new_y, CANVAS_WIDTH, CANVAS_HEIGHT);
+        new_x = wrapped_x;
+        new_y = wrapped_y;
+    } else {
+        // Bounce mode: reflect off boundaries
+        if new_x < MARGIN {
+            new_x = MARGIN;
+            new_angle = std::f64::consts::PI - new_angle;
+        } else if new_x > CANVAS_WIDTH - MARGIN {
+            new_x = CANVAS_WIDTH - MARGIN;
+            new_angle = std::f64::consts::PI - new_angle;
+        }
+        
+        if new_y < MARGIN {
+            new_y = MARGIN;
+            new_angle = -new_angle;
+        } else if new_y > CANVAS_HEIGHT - MARGIN {
+            new_y = CANVAS_HEIGHT - MARGIN;
+            new_angle = -new_angle;
+        }
     }
     
     (new_x, new_y, new_angle, new_timer)
@@ -630,8 +744,12 @@ fn calculate_random_walk_step(state: &SimulationState, ant_idx: usize, x: f64, y
 fn calculate_return_to_nest_step(state: &SimulationState, _ant_idx: usize, x: f64, y: f64, move_speed: f64) -> (f64, f64, f64) {
     let mut rng = thread_rng();
     
-    // Direction towards nest
-    let nest_angle = (state.nest_y - y).atan2(state.nest_x - x);
+    // Direction towards nest (considering torus wrapping)
+    let nest_angle = if state.torus_mode {
+        calculate_torus_angle(x, y, state.nest_x, state.nest_y)
+    } else {
+        (state.nest_y - y).atan2(state.nest_x - x)
+    };
     
     // Add small random deviation to make path more natural
     let angle_noise = (rng.gen::<f64>() - 0.5) * 0.3;
@@ -639,8 +757,17 @@ fn calculate_return_to_nest_step(state: &SimulationState, _ant_idx: usize, x: f6
     
     // Move towards nest
     let step_size = move_speed * 1.5; // Slightly faster when returning
-    let new_x = x + actual_angle.cos() * step_size;
-    let new_y = y + actual_angle.sin() * step_size;
+    let mut new_x = x + actual_angle.cos() * step_size;
+    let mut new_y = y + actual_angle.sin() * step_size;
+    
+    // Handle torus wrapping for return movement
+    if state.torus_mode {
+        const CANVAS_WIDTH: f64 = 800.0;
+        const CANVAS_HEIGHT: f64 = 600.0;
+        let (wrapped_x, wrapped_y) = normalize_torus_coordinates(new_x, new_y, CANVAS_WIDTH, CANVAS_HEIGHT);
+        new_x = wrapped_x;
+        new_y = wrapped_y;
+    }
     
     (new_x, new_y, actual_angle)
 }

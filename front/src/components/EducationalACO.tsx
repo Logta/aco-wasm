@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Pause, Play, RotateCcw, Settings } from "lucide-react";
+import { Eye, EyeOff, Pause, Play, RotateCcw, Settings, ToggleLeft, ToggleRight } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useEducationalACOGlobal } from "../hooks/useEducationalACOGlobal";
@@ -13,6 +13,7 @@ export default function EducationalACO() {
   const [animationSpeed, setAnimationSpeed] = useState([1]);
   const [showTrails, setShowTrails] = useState(true);
   const [showPheromones, setShowPheromones] = useState(true);
+  const [torusMode, setTorusMode] = useState(false);
   const [alpha, setAlpha] = useState([1]);
   const [beta, setBeta] = useState([2]);
   const [evaporation, setEvaporation] = useState([0.1]);
@@ -173,6 +174,15 @@ export default function EducationalACO() {
     }
   };
 
+  const toggleTorusMode = async () => {
+    const newTorusMode = !torusMode;
+    setTorusMode(newTorusMode);
+    if (isInitialized) {
+      const wasmModule = await import("../education-wasm/education_wasm.js");
+      wasmModule.set_torus_mode(newTorusMode);
+    }
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -324,6 +334,19 @@ export default function EducationalACO() {
                       <EyeOff className="w-4 h-4 mr-2" />
                     )}
                     フェロモンを{showPheromones ? "隠す" : "表示"}
+                  </Button>
+                  <Button
+                    onClick={toggleTorusMode}
+                    variant={torusMode ? "default" : "outline"}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {torusMode ? (
+                      <ToggleRight className="w-4 h-4 mr-2" />
+                    ) : (
+                      <ToggleLeft className="w-4 h-4 mr-2" />
+                    )}
+                    トーラス平面{torusMode ? "無効" : "有効"}
                   </Button>
                 </div>
               </CardContent>

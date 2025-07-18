@@ -169,6 +169,10 @@ impl Renderer {
     }
     
     pub fn draw_ants(&self, ants: &[Ant], show_trails: bool) {
+        self.draw_ants_with_torus(ants, show_trails, false);
+    }
+    
+    pub fn draw_ants_with_torus(&self, ants: &[Ant], show_trails: bool, torus_mode: bool) {
         // Draw ant trails
         if show_trails {
             for ant in ants {
@@ -193,29 +197,70 @@ impl Renderer {
             let color = self.get_ant_color(ant.id);
             let radius = if ant.state == AntState::CarryingFood { 5.0 } else { 4.0 };
             
-            // Draw ant body
-            self.context.begin_path();
-            self.context.set_fill_style(&color.into());
-            self.context.arc(ant.x, ant.y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
-            self.context.fill();
+            // Draw ant at main position
+            self.draw_single_ant(ant.x, ant.y, radius, &color, &ant.state, ant.carrying_food);
             
-            // Draw ant border
-            self.context.begin_path();
-            self.context.set_stroke_style(&"#000000".into());
-            self.context.set_line_width(1.0);
-            self.context.arc(ant.x, ant.y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
-            self.context.stroke();
-            
-            // Draw food indicator if carrying food
-            if ant.state == AntState::CarryingFood && ant.carrying_food > 0.0 {
-                self.context.begin_path();
-                self.context.set_fill_style(&"#FFD700".into());
-                self.context.arc(ant.x, ant.y - 8.0, 2.0, 0.0, 2.0 * std::f64::consts::PI).unwrap();
-                self.context.fill();
+            // If torus mode, also draw wrapped positions near edges
+            if torus_mode {
+                let margin = 50.0; // Distance from edge to start drawing wrapped versions
+                
+                // Draw wrapped versions near edges
+                if ant.x < margin {
+                    // Draw on right edge
+                    self.draw_single_ant(ant.x + self.canvas_width, ant.y, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.x > self.canvas_width - margin {
+                    // Draw on left edge
+                    self.draw_single_ant(ant.x - self.canvas_width, ant.y, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.y < margin {
+                    // Draw on bottom edge
+                    self.draw_single_ant(ant.x, ant.y + self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.y > self.canvas_height - margin {
+                    // Draw on top edge
+                    self.draw_single_ant(ant.x, ant.y - self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
+                
+                // Draw corner wraps
+                if ant.x < margin && ant.y < margin {
+                    self.draw_single_ant(ant.x + self.canvas_width, ant.y + self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.x > self.canvas_width - margin && ant.y < margin {
+                    self.draw_single_ant(ant.x - self.canvas_width, ant.y + self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.x < margin && ant.y > self.canvas_height - margin {
+                    self.draw_single_ant(ant.x + self.canvas_width, ant.y - self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
+                if ant.x > self.canvas_width - margin && ant.y > self.canvas_height - margin {
+                    self.draw_single_ant(ant.x - self.canvas_width, ant.y - self.canvas_height, radius, &color, &ant.state, ant.carrying_food);
+                }
             }
         }
     }
     
+    fn draw_single_ant(&self, x: f64, y: f64, radius: f64, color: &str, state: &AntState, carrying_food: f64) {
+        // Draw ant body
+        self.context.begin_path();
+        self.context.set_fill_style(&color.into());
+        self.context.arc(x, y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
+        self.context.fill();
+        
+        // Draw ant border
+        self.context.begin_path();
+        self.context.set_stroke_style(&"#000000".into());
+        self.context.set_line_width(1.0);
+        self.context.arc(x, y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
+        self.context.stroke();
+        
+        // Draw food indicator if carrying food
+        if *state == AntState::CarryingFood && carrying_food > 0.0 {
+            self.context.begin_path();
+            self.context.set_fill_style(&"#FFD700".into());
+            self.context.arc(x, y - 8.0, 2.0, 0.0, 2.0 * std::f64::consts::PI).unwrap();
+            self.context.fill();
+        }
+    }
     
     fn get_ant_color(&self, ant_id: usize) -> &str {
         match ant_id % 6 {
