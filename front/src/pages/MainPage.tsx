@@ -44,7 +44,7 @@ export default function MainPage() {
                   <li>• 複数都市での実用的な解決</li>
                 </ul>
               </div>
-              <Link to="/tsp">
+              <Link to="/tsp" className="cursor-pointer">
                 <Button className="w-full" size="lg">
                   TSP解決モードを開始
                 </Button>
@@ -69,7 +69,7 @@ export default function MainPage() {
                   <li>• 学習向けの丁寧な説明</li>
                 </ul>
               </div>
-              <Link to="/education">
+              <Link to="/education" className="cursor-pointer">
                 <Button className="w-full" size="lg" variant="outline">
                   教育モードを開始
                 </Button>
