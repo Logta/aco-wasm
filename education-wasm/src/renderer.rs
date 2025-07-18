@@ -62,7 +62,8 @@ impl Renderer {
     pub fn draw_food_sources(&self, food_sources: &[FoodSource]) {
         for (i, food_source) in food_sources.iter().enumerate() {
             let food_ratio = food_source.food_ratio();
-            let radius = 8.0 + food_ratio * 4.0; // Size based on food amount
+            // Make size more proportional to food amount (range: 10-25 pixels)
+            let radius = 10.0 + food_ratio * 15.0; // Larger difference based on food amount
             
             // Color based on food amount (green = full, red = empty)
             let green_component = (food_ratio * 255.0) as u8;
@@ -75,18 +76,20 @@ impl Renderer {
             self.context.arc(food_source.location.x, food_source.location.y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
             self.context.fill();
             
-            // Draw food source border
+            // Draw food source border with thickness based on food amount
             self.context.begin_path();
             self.context.set_stroke_style(&"#333333".into());
-            self.context.set_line_width(2.0);
+            let border_width = 1.0 + food_ratio * 2.0; // Border 1-3px based on food amount
+            self.context.set_line_width(border_width);
             self.context.arc(food_source.location.x, food_source.location.y, radius, 0.0, 2.0 * std::f64::consts::PI).unwrap();
             self.context.stroke();
             
-            // Draw food amount text
+            // Draw food amount text with size proportional to food amount
             self.context.set_fill_style(&"#000000".into());
-            self.context.set_font("10px Arial");
+            let font_size = 10.0 + food_ratio * 6.0; // Font size 10-16px based on food amount
+            self.context.set_font(&format!("{}px Arial", font_size as i32));
             self.context.set_text_align("center");
-            self.context.fill_text(&format!("{:.0}", food_source.food_amount), food_source.location.x, food_source.location.y + 3.0).unwrap();
+            self.context.fill_text(&format!("{:.0}", food_source.food_amount), food_source.location.x, food_source.location.y + font_size * 0.3).unwrap();
         }
     }
     
