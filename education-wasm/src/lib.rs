@@ -398,6 +398,10 @@ pub fn set_aco_param(param: &str, value: f64) {
 
 // Helper function to deposit pheromone at a position
 fn deposit_pheromone_at_position(state: &mut SimulationState, x: f64, y: f64, amount: f64) {
+    if state.pheromone_grid.is_empty() || state.grid_cell_size <= 0.0 {
+        return;
+    }
+    
     let grid_x = (x / state.grid_cell_size) as usize;
     let grid_y = (y / state.grid_cell_size) as usize;
     
@@ -428,6 +432,10 @@ fn deposit_pheromone_at_position(state: &mut SimulationState, x: f64, y: f64, am
 
 // Helper function to get pheromone level at a position
 fn get_pheromone_at_position(state: &SimulationState, x: f64, y: f64) -> f64 {
+    if state.pheromone_grid.is_empty() || state.grid_cell_size <= 0.0 {
+        return 0.0;
+    }
+    
     let grid_x = (x / state.grid_cell_size) as usize;
     let grid_y = (y / state.grid_cell_size) as usize;
     
@@ -471,8 +479,10 @@ fn clear_simulation_internal(state: &mut SimulationState) {
     state.is_running = false;
     state.total_food_collected = 0.0;
     
-    // Clear spatial pheromone grid
-    state.pheromone_grid.fill(0.0);
+    // Clear spatial pheromone grid safely
+    if !state.pheromone_grid.is_empty() {
+        state.pheromone_grid.fill(0.0);
+    }
 }
 
 fn ant_is_at_food_source_internal(state: &SimulationState, ant_idx: usize) -> Option<usize> {
@@ -637,10 +647,12 @@ fn calculate_return_to_nest_step(state: &SimulationState, _ant_idx: usize, x: f6
 
 // Evaporate spatial pheromones
 fn evaporate_spatial_pheromones(state: &mut SimulationState) {
-    for i in 0..state.pheromone_grid.len() {
-        state.pheromone_grid[i] *= 1.0 - state.evaporation_rate * 0.5; // Slower evaporation for spatial pheromones
-        if state.pheromone_grid[i] < 0.01 {
-            state.pheromone_grid[i] = 0.0;
+    if !state.pheromone_grid.is_empty() {
+        for i in 0..state.pheromone_grid.len() {
+            state.pheromone_grid[i] *= 1.0 - state.evaporation_rate * 0.5; // Slower evaporation for spatial pheromones
+            if state.pheromone_grid[i] < 0.01 {
+                state.pheromone_grid[i] = 0.0;
+            }
         }
     }
 }
