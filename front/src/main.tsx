@@ -1,8 +1,10 @@
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { routeTree } from "./routes";
 import "./index.css";
+
+// Import the generated route tree
+import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({ routeTree });
 
@@ -12,7 +14,10 @@ declare module "@tanstack/react-router" {
   }
 }
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Root element not found");
+
+createRoot(rootElement).render(
   <StrictMode>
     <RouterProvider router={router} />
   </StrictMode>
