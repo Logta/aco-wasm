@@ -56,15 +56,15 @@ export function useEducationalACOGlobal() {
 
     try {
       const wasmModule = await import("../education-wasm/education_wasm.js");
-      
+
       // Step the ACO algorithm if we have enough cities and state is running
-      if (stats && stats.cities_count >= 1 && stats.state === 'running') {
+      if (stats && stats.cities_count >= 1 && stats.state === "running") {
         wasmModule.step_simulation();
       }
 
       // Render the current state
       wasmModule.render_simulation();
-      
+
       // Update stats less frequently to reduce WASM calls
       if (!animationFrameRef.current || animationFrameRef.current % 10 === 0) {
         updateStats();

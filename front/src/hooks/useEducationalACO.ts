@@ -56,7 +56,7 @@ export function useEducationalACO() {
 
     try {
       // Step the ACO algorithm if we have enough cities and state is running
-      if (stats && stats.cities_count >= 1 && stats.state === 'running') {
+      if (stats && stats.cities_count >= 1 && stats.state === "running") {
         // Only call step every few frames to reduce WASM calls
         const frameSkip = 1; // Call step every frame
         if (!animationFrameRef.current || animationFrameRef.current % frameSkip === 0) {
@@ -66,7 +66,7 @@ export function useEducationalACO() {
 
       // Render the current state
       aco.render();
-      
+
       // Update stats less frequently to reduce WASM calls
       if (!animationFrameRef.current || animationFrameRef.current % 10 === 0) {
         updateStats(aco);

@@ -1,3 +1,4 @@
+import { Eye, EyeOff, Pause, Play, RotateCcw, Settings } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useEducationalACOGlobal } from "../hooks/useEducationalACOGlobal";
@@ -30,9 +31,19 @@ export default function EducationalACO() {
     isInitialized,
   } = useEducationalACOGlobal();
 
-  const setPresetCities = () => {
-    if (isInitialized) {
-      // Use clearCities from the hook instead of calling WASM directly
+  const generateRandomCities = () => {
+    if (!isInitialized) {
+      alert("まず初期化ボタンを押してください");
+      return;
+    }
+
+    if (isRunning) {
+      alert("シミュレーションを停止してください");
+      return;
+    }
+
+    try {
+      // Clear existing food sources
       clearCities();
 
       // Wait a bit for the clear to complete, then add food sources
@@ -42,23 +53,25 @@ export default function EducationalACO() {
         const nestY = 300;
         const minDistanceFromNest = 100; // Minimum distance from nest
         const margin = 50; // Margin from canvas edges
-        
+
         // Generate 4-8 random food sources
         const numFoodSources = Math.floor(Math.random() * 5) + 4;
-        
+
         for (let i = 0; i < numFoodSources; i++) {
-          let x, y, distanceFromNest;
-          
+          let x: number, y: number, distanceFromNest: number;
+
           // Keep generating positions until we find one far enough from the nest
           do {
             x = margin + Math.random() * (800 - 2 * margin);
             y = margin + Math.random() * (600 - 2 * margin);
             distanceFromNest = Math.sqrt((x - nestX) ** 2 + (y - nestY) ** 2);
           } while (distanceFromNest < minDistanceFromNest);
-          
+
           addCity(x, y);
         }
       }, 50);
+    } catch (err) {
+      console.error("Error generating random food sources:", err);
     }
   };
 
@@ -66,6 +79,8 @@ export default function EducationalACO() {
     if (canvasRef.current && !canvasReady) {
       const canvas = canvasRef.current;
       canvas.id = "education-canvas";
+      canvas.width = 800;
+      canvas.height = 600;
       setCanvasReady(true);
 
       // Initialize WASM after canvas is ready
@@ -76,13 +91,28 @@ export default function EducationalACO() {
   }, [canvasReady, initializeWasm]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || isRunning) return;
+
+    if (!isInitialized) {
+      alert("まず初期化ボタンを押してください");
+      return;
+    }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
 
-    addCity(x, y);
+    // Get click position relative to the display canvas
+    const displayX = event.clientX - rect.left;
+    const displayY = event.clientY - rect.top;
+
+    // Convert to canvas internal coordinates (800x600 logical coordinates)
+    const logicalX = (displayX / rect.width) * 800;
+    const logicalY = (displayY / rect.height) * 600;
+
+    try {
+      addCity(logicalX, logicalY);
+    } catch (err) {
+      console.error("Error adding food source:", err);
+    }
   };
 
   const updateAnimationSpeed = async (value: number[]) => {
@@ -143,116 +173,121 @@ export default function EducationalACO() {
     }
   };
 
-
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="text-red-600">エラー</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600">{error}</p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg text-red-500">エラー: {error}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-center mb-8">蟻の餌探索シミュレーション</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Canvas */}
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
                 <CardTitle>餌探索シミュレーション</CardTitle>
-                <p className="text-sm text-gray-600">
-                  キャンバスをクリックして餌場を追加してください。蟻が巣から餌を運ぶ様子を観察できます！
-                </p>
               </CardHeader>
               <CardContent>
                 <canvas
                   ref={canvasRef}
                   width={800}
                   height={600}
-                  className="border border-gray-300 rounded cursor-crosshair bg-gray-900"
                   onClick={handleCanvasClick}
+                  className="border border-border rounded-lg cursor-crosshair w-full"
+                  style={{ maxWidth: "100%", height: "auto" }}
                 />
+                <p className="text-sm text-muted-foreground mt-2">
+                  {isInitialized
+                    ? "キャンバスをクリックして餌場を追加"
+                    : "まず初期化ボタンを押してください"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-                <div className="flex gap-2 mt-4 flex-wrap">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>コントロール</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!isInitialized && (
+                  <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg">
+                    <p className="text-sm text-yellow-800 mb-2">
+                      WebAssemblyエンジンの初期化が必要です
+                    </p>
+                    <Button
+                      onClick={initializeWasm}
+                      disabled={!initializeWasm}
+                      className="w-full"
+                      variant="default"
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      初期化
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
                   <Button
                     onClick={start}
                     disabled={!isInitialized || isRunning || (stats?.cities_count || 0) < 1}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="flex-1"
                   >
+                    <Play className="w-4 h-4 mr-2" />
                     開始
                   </Button>
                   <Button
                     onClick={pause}
                     disabled={!isInitialized || !isRunning}
-                    className="bg-yellow-600 hover:bg-yellow-700"
+                    className="flex-1"
                   >
+                    <Pause className="w-4 h-4 mr-2" />
                     一時停止
                   </Button>
-                  <Button onClick={reset} disabled={!isInitialized} className="bg-blue-600 hover:bg-blue-700">
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={reset}
+                    disabled={!isInitialized || isRunning}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
                     リセット
                   </Button>
                   <Button
-                    onClick={setPresetCities}
-                    disabled={!isInitialized}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    onClick={generateRandomCities}
+                    disabled={!isInitialized || isRunning}
+                    variant="outline"
+                    className="flex-1"
                   >
-                    初期配置
-                  </Button>
-                  <Button onClick={clearCities} disabled={!isInitialized} variant="destructive">
-                    全餌場削除
+                    ランダム
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Controls */}
-          <div className="space-y-6">
-            {/* Statistics */}
-            <Card>
-              <CardHeader>
-                <CardTitle>統計情報</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-sm">
-                  <div>餌場数: {stats?.cities_count || 0}</div>
-                  <div>蟻数: {stats?.ants_count || 0}</div>
-                  <div>
-                    集めた餌の量:{" "}
-                    {(stats?.best_distance || 0).toFixed(1)} 単位
-                  </div>
-                  <div>
-                    状態:{" "}
-                    {stats?.state === "idle"
-                      ? "待機中"
-                      : stats?.state === "running"
-                        ? "実行中"
-                        : stats?.state === "paused"
-                          ? "一時停止中"
-                          : stats?.state || "不明"}
-                  </div>
-                </div>
+                <Button
+                  onClick={clearCities}
+                  disabled={!isInitialized || isRunning}
+                  variant="destructive"
+                  className="w-full"
+                >
+                  全餌場削除
+                </Button>
               </CardContent>
             </Card>
 
-            {/* Animation Controls */}
             <Card>
               <CardHeader>
-                <CardTitle>アニメーション</CardTitle>
+                <CardTitle>表示設定</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label>速度: {animationSpeed[0].toFixed(1)}x</Label>
+                  <Label>アニメーション速度: {animationSpeed[0].toFixed(1)}倍</Label>
                   <Slider
                     value={animationSpeed}
                     onValueChange={updateAnimationSpeed}
@@ -270,6 +305,11 @@ export default function EducationalACO() {
                     size="sm"
                     className="w-full"
                   >
+                    {showTrails ? (
+                      <Eye className="w-4 h-4 mr-2" />
+                    ) : (
+                      <EyeOff className="w-4 h-4 mr-2" />
+                    )}
                     蟻の軌跡を{showTrails ? "隠す" : "表示"}
                   </Button>
                   <Button
@@ -278,13 +318,17 @@ export default function EducationalACO() {
                     size="sm"
                     className="w-full"
                   >
-                    フェロモン濃度を{showPheromones ? "隠す" : "表示"}
+                    {showPheromones ? (
+                      <Eye className="w-4 h-4 mr-2" />
+                    ) : (
+                      <EyeOff className="w-4 h-4 mr-2" />
+                    )}
+                    フェロモンを{showPheromones ? "隠す" : "表示"}
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* ACO Parameters */}
             <Card>
               <CardHeader>
                 <CardTitle>ACOパラメータ</CardTitle>
@@ -299,8 +343,9 @@ export default function EducationalACO() {
                     max={5}
                     step={0.1}
                     className="mt-2"
+                    disabled={isRunning}
                   />
-                  <p className="text-xs text-gray-600 mt-1">フェロモンの重要度</p>
+                  <p className="text-xs text-muted-foreground mt-1">フェロモンの重要度</p>
                 </div>
 
                 <div>
@@ -312,8 +357,9 @@ export default function EducationalACO() {
                     max={5}
                     step={0.1}
                     className="mt-2"
+                    disabled={isRunning}
                   />
-                  <p className="text-xs text-gray-600 mt-1">距離の重要度</p>
+                  <p className="text-xs text-muted-foreground mt-1">距離の重要度</p>
                 </div>
 
                 <div>
@@ -325,8 +371,9 @@ export default function EducationalACO() {
                     max={0.5}
                     step={0.01}
                     className="mt-2"
+                    disabled={isRunning}
                   />
-                  <p className="text-xs text-gray-600 mt-1">フェロモンの蒸発率</p>
+                  <p className="text-xs text-muted-foreground mt-1">フェロモンの蒸発率</p>
                 </div>
 
                 <div>
@@ -338,7 +385,42 @@ export default function EducationalACO() {
                     max={50}
                     step={1}
                     className="mt-2"
+                    disabled={isRunning}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>統計</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>初期化:</span>
+                    <span className={isInitialized ? "text-green-600" : "text-red-600"}>
+                      {isInitialized ? "完了" : "未完了"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>餌場数:</span>
+                    <span>{stats?.cities_count || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>蟻数:</span>
+                    <span>{stats?.ants_count || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>集めた餌の量:</span>
+                    <span>{(stats?.best_distance || 0).toFixed(1)} 単位</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>ステータス:</span>
+                    <span className={isRunning ? "text-green-600" : "text-gray-600"}>
+                      {isRunning ? "実行中" : "停止中"}
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
