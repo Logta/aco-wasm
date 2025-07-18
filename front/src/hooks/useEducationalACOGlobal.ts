@@ -32,9 +32,9 @@ export function useEducationalACOGlobal() {
     if (initializingRef.current || isInitialized) {
       return;
     }
-    
+
     initializingRef.current = true;
-    
+
     try {
       // Import the education wasm module
       const wasmModule = await import("../education-wasm/education_wasm.js");

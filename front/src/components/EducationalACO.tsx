@@ -1,4 +1,13 @@
-import { Eye, EyeOff, Pause, Play, RotateCcw, Settings, ToggleLeft, ToggleRight } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  ToggleLeft,
+  ToggleRight,
+} from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useEducationalACOGlobal } from "../hooks/useEducationalACOGlobal";
