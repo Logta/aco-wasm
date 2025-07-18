@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Home } from "lucide-react";
 import ACOVisualizer from "../components/ACOVisualizer";
 import { Button } from "../components/ui/button";
 
@@ -11,9 +12,17 @@ export default function TSPPage() {
             <h1 className="text-2xl font-bold">ACO TSP可視化ツール</h1>
             <p className="text-muted-foreground">巡回セールスマン問題の蟻コロニー最適化</p>
           </div>
-          <Link to="/education">
-            <Button variant="outline">教育モードに切り替え</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/">
+              <Button variant="ghost" size="sm">
+                <Home className="h-4 w-4 mr-2" />
+                メインページ
+              </Button>
+            </Link>
+            <Link to="/education">
+              <Button variant="outline">教育モードに切り替え</Button>
+            </Link>
+          </div>
         </div>
       </header>
 
