@@ -290,6 +290,11 @@ pub fn render_simulation() {
         if let Ok(renderer) = Renderer::new(&state.canvas_id) {
             renderer.clear();
             
+            // Draw spatial pheromone grid first (as background) if enabled
+            if state.show_pheromones {
+                renderer.draw_spatial_pheromones(&state.pheromone_grid, state.grid_width, state.grid_height, state.grid_cell_size);
+            }
+            
             // Draw nest
             let nest = Nest { location: Location::new(state.nest_x, state.nest_y) };
             renderer.draw_nest(&nest);
@@ -303,11 +308,6 @@ pub fn render_simulation() {
                 }
             }).collect();
             renderer.draw_food_sources(&food_sources);
-            
-            // Draw spatial pheromone grid if enabled
-            if state.show_pheromones {
-                renderer.draw_spatial_pheromones(&state.pheromone_grid, state.grid_width, state.grid_height, state.grid_cell_size);
-            }
             
             // Draw ants
             let ants: Vec<Ant> = state.ants.iter().map(|(id, x, y, target_x, target_y, is_moving, move_progress, ant_state, carrying_food, total_food, current_target_food, _direction_angle, _move_speed, _exploration_timer)| {

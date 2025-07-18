@@ -101,7 +101,7 @@ impl Renderer {
             return;
         }
         
-        // Draw each cell in the pheromone grid
+        // Draw each cell in the pheromone grid as tiles
         for y in 0..grid_height {
             for x in 0..grid_width {
                 let idx = y * grid_width + x;
@@ -110,20 +110,16 @@ impl Renderer {
                     if pheromone_level > 0.01 {
                         let normalized_level = (pheromone_level / max_pheromone).min(1.0);
                         
-                        // Draw pheromone as semi-transparent cyan circles
-                        let opacity = normalized_level * 0.6;
-                        let radius = cell_size * 0.5 + normalized_level * cell_size * 0.3;
+                        // Draw pheromone as semi-transparent cyan tiles
+                        let opacity = normalized_level * 0.7;
                         
-                        self.context.begin_path();
                         self.context.set_fill_style(&format!("rgba(0, 255, 255, {})", opacity).into());
-                        self.context.arc(
-                            x as f64 * cell_size + cell_size * 0.5,
-                            y as f64 * cell_size + cell_size * 0.5,
-                            radius,
-                            0.0,
-                            2.0 * std::f64::consts::PI
-                        ).unwrap();
-                        self.context.fill();
+                        self.context.fill_rect(
+                            x as f64 * cell_size,
+                            y as f64 * cell_size,
+                            cell_size,
+                            cell_size
+                        );
                     }
                 }
             }
