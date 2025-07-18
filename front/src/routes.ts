@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute } from "@tanstack/react-router";
 import App from "./App";
 import EducationPage from "./pages/EducationPage";
+import MainPage from "./pages/MainPage";
 import TSPPage from "./pages/TSPPage";
 
 export const rootRoute = createRootRoute({
@@ -10,7 +11,7 @@ export const rootRoute = createRootRoute({
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: TSPPage,
+  component: MainPage,
 });
 
 export const tspRoute = createRoute({
